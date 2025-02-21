@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Универсальный разбор XML и вывод таблицы</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #progress {
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #eee;
+      border: 1px solid #ccc;
+    }
+    #output {
+      overflow-x: auto;
+    }
+
+    #newTableContainer {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid #ccc;
+  padding: 10px;
+  background: #f4f4f4;
+  width: 100vw;                    
+  margin-left: calc(50% - 50vw);   
+  box-sizing: border-box;
+}
+
+th:first-child,
+td:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 2;      
+}
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      background: #ddd;
+    }
+    input[type="file"] {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Разбор XML и вывод таблицы</h1>
+    <p>Выберите XML-файл:</p>
+    <input type="file" id="fileInput" accept=".xml">
+    <div id="progress"></div>
+    <!-- Этот контейнер можно оставить для результатов, например, исходного вывода -->
+    <div id="output"></div>
+    <!-- Новый контейнер для новой таблицы -->
+    
+  </div>
+  <div id="newTableContainer"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const progressDiv = document.getElementById('progress');
+    const outputDiv = document.getElementById('output');
+    // Новый контейнер для таблицы
+    const newTableContainer = document.getElementById('newTableContainer');
+
+    fileInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      progressDiv.innerHTML = 'Начинается обработка файла...<br>';
+      outputDiv.innerHTML = '';
+      newTableContainer.innerHTML = '';  // очищаем контейнер для новой таблицы
+
+      // Создаем Web Worker
+      const worker = new Worker('worker.js');
+      // Передаем выбранный файл (Web API File)
+      worker.postMessage({ file });
+
+      worker.onmessage = function(e) {
+        const data = e.data;
+        if (data.type === 'progress') {
+          progressDiv.innerHTML += data.message + '<br>';
+        } else if (data.type === 'result') {
+          progressDiv.innerHTML += '<br>Обработка завершена.<br>';
+          // Создаем таблицу на основе полученных данных и выводим её в новом контейнере
+          createTable(data.records);
+        }
+      };
+
+      worker.onerror = function(err) {
+        progressDiv.innerHTML += `<span style="color:red;">Ошибка: ${err.message}</span>`;
+      };
+    });
+
+    // Функция универсального создания таблицы на основе массива объектов (records)
+    function createTable(records) {
+      if (!records.length) {
+        newTableContainer.innerHTML = 'Нет данных для отображения.';
+        return;
+      }
+      
+      // Соберём все ключи со всех записей, чтобы сформировать общую "шапку" таблицы
+      const allKeysSet = new Set();
+      records.forEach(record => {
+        Object.keys(record).forEach(key => allKeysSet.add(key));
+      });
+      const allKeys = Array.from(allKeysSet).sort();
+
+      // Создаём таблицу
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      
+      // Первая колонка – номер записи
+      const thIndex = document.createElement('th');
+      thIndex.textContent = '#';
+      headerRow.appendChild(thIndex);
+      
+      // Остальные колонки – названия ключей
+      allKeys.forEach(key => {
+        const th = document.createElement('th');
+        th.textContent = key;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Создаём тело таблицы
+      const tbody = document.createElement('tbody');
+      records.forEach((record, index) => {
+        const row = document.createElement('tr');
+        
+        // Номер записи
+        const tdIndex = document.createElement('td');
+        tdIndex.textContent = index + 1;
+        row.appendChild(tdIndex);
+        
+        // Ячейки данных
+        allKeys.forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = record[key] || '';
+          row.appendChild(td);
+        });
+        
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      
+      // Добавляем таблицу в новый контейнер
+      newTableContainer.appendChild(table);
+    }
+  </script>
+</body>
+</html>
